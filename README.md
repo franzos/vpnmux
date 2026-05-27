@@ -37,14 +37,6 @@ Enable it once installed:
 sudo systemctl enable --now vpnmux
 ```
 
-## Docs
-
-- [`docs/design.md`](docs/design.md) — architecture and the decisions behind it.
-- [`docs/findings.md`](docs/findings.md) — source-verified Mullvad/Tailscale kernel,
-  firewall, and DNS behaviour on a no-systemd Guix host (the "why").
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — adding a provider, and porting to other
-  Linux distros and init systems.
-
 ## Run (manual)
 
 Run the daemon as root — it drives `nft`/`mullvad`/`tailscale` and reconciles
