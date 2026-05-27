@@ -1,0 +1,43 @@
+[Unit]
+Description=vpnmux — mullvad/tailscale coexistence daemon
+After=network-online.target mullvad-daemon.service tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/vpnmux daemon
+Restart=on-failure
+RestartSec=2
+# Create /run/vpnmux (status) and /var/lib/vpnmux (desired) with root ownership.
+RuntimeDirectory=vpnmux
+StateDirectory=vpnmux
+RuntimeDirectoryMode=0700
+StateDirectoryMode=0700
+# Uncomment for verbose logging in the journal:
+# Environment=VPNMUX_LOG=debug
+
+# --- Sandboxing / hardening ---
+# The daemon runs as root (needs CAP_NET_ADMIN for nft and execs mullvad/tailscale),
+# so these directives reduce blast radius without breaking its core duties:
+# exec external binaries, talk netlink, and rewrite /etc/resolv.conf.
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/etc/resolv.conf /run/vpnmux /var/lib/vpnmux
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+# AF_NETLINK is required for nft; AF_UNIX/INET/INET6 for IPC and probes.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+# Belt-and-suspenders: state/status files non-world-readable (Rust also chmods 0600).
+UMask=0077
+# NOTE: SystemCallFilter intentionally omitted — nft may need privileged syscalls
+# and a too-narrow filter risks breaking exec of nft/mullvad/tailscale.
+# NOTE: PrivateDevices/ProtectProc omitted to avoid breaking the execed VPN tooling.
+
+[Install]
+WantedBy=multi-user.target

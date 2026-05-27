@@ -1,0 +1,34 @@
+[package]
+name = "vpnmux"
+version = "0.1.0"
+edition = "2021"
+authors = ["Franz Geffke <mail@gofranz.com>"]
+license = "GPL-3.0-only"
+description = "Arbitrates Mullvad and Tailscale so they coexist at the netfilter/DNS layer"
+repository = "https://github.com/franzos/vpnmux"
+readme = "README.md"
+
+[[bin]]
+name = "vpnmux"
+path = "src/main.rs"
+
+[package.metadata.deb]
+maintainer = "Franz Geffke <mail@gofranz.com>"
+section = "net"
+assets = [
+    ["target/release/vpnmux", "usr/bin/", "755"],
+    ["packaging/vpnmux.service", "lib/systemd/system/", "644"],
+    ["README.md", "usr/share/doc/vpnmux/README.md", "644"],
+]
+
+[package.metadata.generate-rpm]
+assets = [
+    { source = "target/release/vpnmux", dest = "/usr/bin/vpnmux", mode = "755" },
+    { source = "packaging/vpnmux.service", dest = "/usr/lib/systemd/system/vpnmux.service", mode = "644" },
+    { source = "README.md", dest = "/usr/share/doc/vpnmux/README.md", mode = "644" },
+]
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

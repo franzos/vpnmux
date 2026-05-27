@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 120" fill="none">
+  <defs>
+    <linearGradient id="mull" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#fcd34d"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+    <linearGradient id="tail" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#93c5fd"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+    <linearGradient id="out" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#6ee7b7"/>
+      <stop offset="100%" stop-color="#10b981"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(6, 0)">
+    <path d="M22 40 H40 Q50 40 50 52" stroke="url(#mull)" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <path d="M22 80 H40 Q50 80 50 68" stroke="url(#tail)" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <circle cx="22" cy="40" r="6" fill="#fcd34d"/>
+    <circle cx="22" cy="80" r="6" fill="#93c5fd"/>
+    <rect x="46" y="46" width="28" height="28" rx="8" fill="#1e293b" stroke="url(#out)" stroke-width="3"/>
+    <path d="M74 60 H98" stroke="url(#out)" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <circle cx="98" cy="60" r="6" fill="#10b981"/>
+  </g>
+  <text x="150" y="74" font-family="ui-monospace, 'Cascadia Code', 'Fira Code', monospace" font-size="56" font-weight="700" fill="#e2e8f0" letter-spacing="-2">vpnmux</text>
+  <text x="152" y="98" font-family="system-ui, -apple-system, sans-serif" font-size="14" fill="#94a3b8">mullvad + tailscale coexistence daemon</text>
+</svg>
