@@ -21,6 +21,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # stable @ 1.94.1
         with:
+          toolchain: stable
           targets: ${{ matrix.target }}
 
       - name: Install aarch64 cross linker
@@ -55,6 +56,8 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # stable @ 1.94.1
+        with:
+          toolchain: stable
 
       - name: Install cargo-deb
         run: cargo install cargo-deb --version 3.7.0 --locked
@@ -74,6 +77,8 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # stable @ 1.94.1
+        with:
+          toolchain: stable
 
       - name: Install cargo-generate-rpm
         run: cargo install cargo-generate-rpm --version 0.21.0 --locked
