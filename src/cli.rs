@@ -50,7 +50,7 @@ pub fn set(args: &[String]) -> Result<()> {
     }
 
     // Serialize concurrent `set` so the generation read-bump-write can't race.
-    let _lock = FileLock::acquire(DESIRED_LOCK)?;
+    let _lock = FileLock::acquire(DESIRED_LOCK).map_err(hint_on_eacces)?;
     let prev_gen = read_desired(paths::DESIRED_FILE)?.map_or(0, |d| d.generation);
     let gen = prev_gen + 1;
     write_desired(
@@ -130,6 +130,21 @@ fn parse_args(args: &[String]) -> Result<(ProviderSet, bool)> {
         }
     }
     Ok((want, yes))
+}
+
+/// Translate a permission-denied error into actionable guidance — the dirs are
+/// root-only unless the daemon has chowned them to the configured group.
+fn hint_on_eacces(e: Box<dyn std::error::Error>) -> Box<dyn std::error::Error> {
+    let msg = e.to_string();
+    if msg.contains("Permission denied") || msg.contains("(os error 13)") {
+        return format!(
+            "{msg}\n\
+             hint: add your user to the 'vpnmux' group (and re-login), \
+             or run this command with sudo"
+        )
+        .into();
+    }
+    e
 }
 
 /// Shared lockdown-mode check used by the precheck; delegates to the single

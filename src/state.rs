@@ -2,7 +2,10 @@ use crate::types::{format_set, parse_set, ProviderId, ProviderSet, Result};
 use std::fmt::Write as _;
 use std::fs;
 
-const STATE_MODE: u32 = 0o600;
+/// Group-rw so members of the `vpnmux` group can drive the CLI without sudo;
+/// the parent dirs are setgid + root:vpnmux 0770, so newly created files
+/// inherit the group via the kernel's BSD-style group inheritance.
+const STATE_MODE: u32 = 0o660;
 /// Cap state-file reads so a corrupted/huge file can't be slurped whole.
 const MAX_STATE_BYTES: u64 = 64 * 1024;
 

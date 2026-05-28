@@ -47,16 +47,38 @@ command-by-command trace (default is a quiet, diff-based change-log):
 sudo target/release/vpnmux daemon
 ```
 
-Switch state in another shell (also root for now — it writes
-`/var/lib/vpnmux/desired`, which the daemon picks up):
+Switch state in another shell. If your user is in the `vpnmux` group (see
+**Sudo-less CLI** below) the `sudo` is optional — the CLI only needs write
+access to `/var/lib/vpnmux/desired`, which the daemon picks up:
 
 ```bash
-sudo target/release/vpnmux set mullvad tailscale   # both, Tailscale via the tunnel
-sudo target/release/vpnmux set mullvad             # Mullvad only
-sudo target/release/vpnmux set tailscale           # Tailscale only
-sudo target/release/vpnmux set                     # none
-sudo target/release/vpnmux status
+vpnmux set mullvad tailscale   # both, Tailscale via the tunnel
+vpnmux set mullvad             # Mullvad only
+vpnmux set tailscale           # Tailscale only
+vpnmux set                     # none
+vpnmux status
 ```
+
+### Sudo-less CLI
+
+The daemon mirrors `mullvad-daemon`'s pattern: at startup it chowns
+`/var/lib/vpnmux` and `/run/vpnmux` to `root:vpnmux` (mode `02770`, setgid)
+when a `vpnmux` system group exists, so members of that group can drive
+`vpnmux set`/`status` without `sudo`. To enable:
+
+```bash
+sudo groupadd --system vpnmux
+sudo usermod -aG vpnmux "$USER"
+sudo systemctl restart vpnmux
+# log out & back in (or `newgrp vpnmux`) for the group to take effect
+```
+
+Override the group name with `VPNMUX_GROUP=othergroup` in the unit's
+`Environment=`, or set it empty to opt out and keep the dirs root-only.
+
+> Anyone in the `vpnmux` group can flip providers, including disabling Mullvad
+> while lockdown is on (the `[y/N]` prompt still applies). Same trust model as
+> the `mullvad` group on systems that use one.
 
 Switching to `none`/`tailscale` while Mullvad lockdown is on warns and prompts
 first — it would cut all connectivity (that's the killswitch doing its job).

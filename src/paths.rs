@@ -5,6 +5,20 @@ pub const DESIRED_FILE: &str = "/var/lib/vpnmux/desired";
 pub const STATUS_FILE: &str = "/run/vpnmux/status";
 pub const RESOLV_CONF: &str = "/etc/resolv.conf";
 
+pub const STATE_DIR: &str = "/var/lib/vpnmux";
+pub const RUNTIME_DIR: &str = "/run/vpnmux";
+
+/// Group whose members may drive the CLI without sudo. Mirrors Mullvad's
+/// `MULLVAD_MANAGEMENT_SOCKET_GROUP`: unset (or empty) keeps state dirs
+/// root-only, set names the group the daemon chowns the dirs to at startup.
+pub fn group_name() -> Option<String> {
+    match std::env::var("VPNMUX_GROUP") {
+        Ok(s) if s.is_empty() => None,
+        Ok(s) => Some(s),
+        Err(_) => Some("vpnmux".to_string()),
+    }
+}
+
 /// Where to look for binaries, in order: the Guix system profile (a root
 /// shepherd service has a minimal `$PATH`), then the FHS locations Debian and
 /// other distros use. A daemon under systemd or shepherd can't rely on `$PATH`.

@@ -8,11 +8,17 @@ Type=simple
 ExecStart=/usr/bin/vpnmux daemon
 Restart=on-failure
 RestartSec=2
-# Create /run/vpnmux (status) and /var/lib/vpnmux (desired) with root ownership.
+# /run/vpnmux (status) and /var/lib/vpnmux (desired). Created root-owned with
+# setgid + group rwx so a `vpnmux` system group, once present, gives its
+# members CLI access without sudo (the daemon chowns to root:vpnmux at startup,
+# mirroring mullvad-daemon's MULLVAD_MANAGEMENT_SOCKET_GROUP). When the group
+# is absent the daemon tightens the dirs back to 0700 — set
+# `Environment=VPNMUX_GROUP=` (empty) to opt out, or override the name to
+# something other than `vpnmux`.
 RuntimeDirectory=vpnmux
 StateDirectory=vpnmux
-RuntimeDirectoryMode=0700
-StateDirectoryMode=0700
+RuntimeDirectoryMode=2770
+StateDirectoryMode=2770
 # Uncomment for verbose logging in the journal:
 # Environment=VPNMUX_LOG=debug
 
@@ -33,8 +39,10 @@ RestrictRealtime=yes
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
-# Belt-and-suspenders: state/status files non-world-readable (Rust also chmods 0600).
-UMask=0077
+# Belt-and-suspenders: state/status files non-group-readable by default;
+# Rust then sets exact 0o660 on the desired/status files, picked up by group
+# members via the setgid inheritance on the parent dirs.
+UMask=0027
 # NOTE: SystemCallFilter intentionally omitted — nft may need privileged syscalls
 # and a too-narrow filter risks breaking exec of nft/mullvad/tailscale.
 # NOTE: PrivateDevices/ProtectProc omitted to avoid breaking the execed VPN tooling.
