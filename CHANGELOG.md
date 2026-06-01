@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.3] - 2026-06-01
+
+### Added
+- DNS backend detection, shown in `vpnmux status` and `--json`
+- resolvconf/openresolv backfill on resolvconf-managed systems
+
+### Changed
+- Leaves systemd-resolved/NetworkManager DNS alone instead of erroring
+
 ## [0.1.2] - 2026-06-01
 
 ### Added

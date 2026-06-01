@@ -20,6 +20,12 @@ impl CmdOutput {
 /// is testable without touching the real system.
 pub trait Runner {
     fn run(&self, bin: &str, args: &[&str]) -> Result<CmdOutput>;
+
+    /// Like `run`, but feeds `stdin` to the child. Default delegates to `run`
+    /// (ignoring stdin) so implementors only override when they need it.
+    fn run_stdin(&self, bin: &str, args: &[&str], _stdin: &str) -> Result<CmdOutput> {
+        self.run(bin, args)
+    }
 }
 
 pub struct RealRunner;
@@ -30,6 +36,33 @@ impl Runner for RealRunner {
         let code = out.status.code().unwrap_or(-1);
         let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
         crate::debug!("exec: {} {} -> {}", bin, args.join(" "), code);
+        if code != 0 && !stderr.trim().is_empty() {
+            crate::debug!("exec stderr: {}", stderr.trim());
+        }
+        Ok(CmdOutput {
+            code,
+            stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
+        })
+    }
+
+    fn run_stdin(&self, bin: &str, args: &[&str], stdin: &str) -> Result<CmdOutput> {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+        let mut child = Command::new(bin)
+            .args(args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+        child
+            .stdin
+            .take()
+            .ok_or("run_stdin: child stdin unavailable")?
+            .write_all(stdin.as_bytes())?;
+        let out = child.wait_with_output()?;
+        let code = out.status.code().unwrap_or(-1);
+        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+        crate::debug!("exec: {} {} <stdin> -> {}", bin, args.join(" "), code);
         if code != 0 && !stderr.trim().is_empty() {
             crate::debug!("exec stderr: {}", stderr.trim());
         }
@@ -86,6 +119,10 @@ impl Runner for MockRunner {
             code: 0,
             stdout: String::new(),
         }))
+    }
+
+    fn run_stdin(&self, bin: &str, args: &[&str], _stdin: &str) -> Result<CmdOutput> {
+        self.run(bin, args)
     }
 }
 

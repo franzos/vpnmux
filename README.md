@@ -18,8 +18,7 @@ desired set of providers every couple of seconds; the **CLI** just writes the
 desired state and reads back status. Single writer, idempotent, std-only Rust
 (no external crates).
 
-**Status:** works, validated as a shell prototype and reimplemented in Rust
-(43 unit tests). Linux-only — it drives `nft`/`mullvad`/`tailscale` directly.
+**Status:** Linux-only — it drives `nft`/`mullvad`/`tailscale` directly.
 
 ## Install
 
@@ -36,6 +35,13 @@ Enable it once installed:
 ```bash
 sudo systemctl enable --now vpnmux
 ```
+
+> **Heads up:** I run this primarily on Guix. vpnmux builds and runs natively on
+> Debian 12, where the DNS-backend handling is tested (see
+> [DNS backends](#dns-backends)); it only leans on systemd and the
+> `nft`/`mullvad`/`tailscale` binaries, so it *should* run fine on any systemd
+> distro. The packaged `.deb`/`.rpm` install path and Fedora/RHEL haven't been
+> heavily exercised yet, though
 
 ## Run (manual)
 
@@ -95,6 +101,32 @@ first — it would cut all connectivity (that's the killswitch doing its job).
 The daemon never imposes a default: with no desired state set it stays idle and
 touches nothing.
 
+## DNS backends
+
+vpnmux only touches DNS to fill a gap: when Mullvad disconnects it takes its
+`10.64.0.1` resolver with it, and on a box with no DNS manager nothing else fills
+in. So it detects how your system manages `/etc/resolv.conf` and acts *only* where
+there's a real gap — on managed systems the resolver manager already keeps a
+working upstream when Mullvad/Tailscale drop their own links, so vpnmux stays out
+of the way. Either way, `vpnmux status` reports the backend it detected.
+
+| Backend | Default on | What vpnmux does |
+|---------|-----------|------------------|
+| **systemd-resolved** (stub `127.0.0.53`) | Ubuntu, Mint, Pop!_OS, Fedora, NixOS (`services.resolved`) | detect only — resolved keeps upstream DNS; no backfill |
+| **NetworkManager** (writes `resolv.conf` directly) | Debian desktop, RHEL/Rocky/Alma, Arch, Manjaro, Guix System (desktop) | detect only — NM keeps upstream DNS; no backfill |
+| **static `/etc/resolv.conf`** | Debian server/minimal, Guix System (server/DHCP), hand-rolled setups | backfills the default-route resolver when Mullvad leaves, strips it when Mullvad returns |
+| **resolvconf / openresolv** | NixOS (default), legacy / opt-in | backfills via `resolvconf -a vpnmux` (`-d` on the way out) |
+| **netconfig** | openSUSE | detect only — netconfig keeps upstream DNS; no backfill |
+| **other / unknown** | ConnMan, anything else | left alone — never overwrites a managed `resolv.conf` |
+
+Set `VPNMUX_DNS=<ip>` to override the backfilled resolver (default: the
+default-route gateway). It only applies on the backends vpnmux backfills.
+
+Guix System has no systemd-resolved (it doesn't use systemd), so it lands on
+NetworkManager (default desktop), a static `/etc/resolv.conf` (server/DHCP), or
+ConnMan (handled as *other/unknown*). NixOS defaults to openresolv and only uses
+systemd-resolved if you enable `services.resolved`.
+
 ## waybar
 
 A status icon plus a click-to-switch menu that only offers the configurations
@@ -139,4 +171,5 @@ with [`packaging/waybar/style.css`](packaging/waybar/style.css). The toggle send
 | `VPNMUX_LOG` | `error` / `info` (default) / `debug` |
 | `VPNMUX_NFT` | absolute path to `nft` (else scans `/gnu/store`) |
 | `VPNMUX_MULLVAD` / `VPNMUX_TAILSCALE` | adapter binary paths |
+| `VPNMUX_DNS` | resolver to backfill on static/resolvconf backends (default: default-route gateway) |
 | `VPNMUX_GROUP` | system group for sudo-less CLI (default: `vpnmux`; empty to opt out) |

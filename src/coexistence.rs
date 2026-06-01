@@ -1,3 +1,4 @@
+use crate::dns::DnsBackend;
 use crate::nft;
 use crate::runner::Runner;
 use crate::types::{ProviderId, ProviderSet, Result};
@@ -18,6 +19,7 @@ pub fn apply(
     active: &ProviderSet,
     newly_active: &ProviderSet,
     bins: &Bins,
+    backend: DnsBackend,
     r: &dyn Runner,
 ) -> Result<()> {
     let mullvad = active.contains(&ProviderId::Mullvad);
@@ -36,14 +38,16 @@ pub fn apply(
         if mullvad {
             // Mullvad owns DNS again; drop any resolver we backfilled earlier.
             if newly_active.contains(&ProviderId::Mullvad) {
-                crate::dns::remove_injected_resolver(&bins.resolv_conf)?;
+                crate::dns::remove_injected_resolver(&bins.resolv_conf, backend, r)?;
             }
         } else {
             // Mullvad gone (tailscale-only or none): backfill a resolver so
             // name resolution keeps working.
             crate::dns::ensure_resolver(
                 &bins.resolv_conf,
+                backend,
                 crate::dns::preferred_resolver().as_deref(),
+                r,
             )?;
         }
     }
@@ -78,7 +82,7 @@ mod tests {
     fn both_active_whitelists_and_disables_magicdns() {
         let r = MockRunner::new().on("nft list table inet mullvad", 0, "chain input {\n}");
         let active = parse_set("mullvad,tailscale").unwrap();
-        apply(&active, &active, &bins(), &r).unwrap();
+        apply(&active, &active, &bins(), DnsBackend::Static, &r).unwrap();
         assert!(r.called("nft insert rule inet mullvad input iifname tailscale* accept"));
         assert!(r.called("tailscale set --accept-dns=false"));
     }
@@ -87,7 +91,7 @@ mod tests {
     fn tailscale_only_disables_magicdns_on_transition() {
         let r = MockRunner::new();
         let active = parse_set("tailscale").unwrap();
-        apply(&active, &active, &bins(), &r).unwrap();
+        apply(&active, &active, &bins(), DnsBackend::Static, &r).unwrap();
         assert!(r.called("tailscale set --accept-dns=false"));
         assert!(!r.called("tailscale set --accept-dns=true"));
         assert!(!r.called("nft list table inet mullvad"));
@@ -98,7 +102,14 @@ mod tests {
         // Already-active tailscale (not in newly_active): accept-dns is a no-op.
         let r = MockRunner::new();
         let active = parse_set("tailscale").unwrap();
-        apply(&active, &ProviderSet::new(), &bins(), &r).unwrap();
+        apply(
+            &active,
+            &ProviderSet::new(),
+            &bins(),
+            DnsBackend::Static,
+            &r,
+        )
+        .unwrap();
         assert!(!r.called("tailscale set --accept-dns=false"));
     }
 
@@ -106,7 +117,7 @@ mod tests {
     fn mullvad_only_does_nothing() {
         let r = MockRunner::new();
         let active = parse_set("mullvad").unwrap();
-        apply(&active, &active, &bins(), &r).unwrap();
+        apply(&active, &active, &bins(), DnsBackend::Static, &r).unwrap();
         assert!(r.calls.borrow().is_empty());
     }
 }

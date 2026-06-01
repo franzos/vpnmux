@@ -121,8 +121,9 @@ fn tick(
         }
     };
 
+    let backend = crate::dns::detect_backend(paths::RESOLV_CONF);
     let prev_active = prev.as_ref().map(|p| p.active.clone()).unwrap_or_default();
-    let outcome = reconcile(&d.providers, providers, &prev_active, bins, r);
+    let outcome = reconcile(&d.providers, providers, &prev_active, bins, backend, r);
 
     let desired_changed = prev.as_ref().map(|p| p.generation) != Some(d.generation);
     if desired_changed {
@@ -165,6 +166,7 @@ fn tick(
             active: outcome.active.clone(),
             available: outcome.available.clone(),
             unavailable: outcome.unavailable.clone(),
+            dns: backend,
         },
     ) {
         crate::error!("write status failed: {e}");

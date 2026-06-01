@@ -1,4 +1,5 @@
 use crate::coexistence::{self, Bins};
+use crate::dns::DnsBackend;
 use crate::provider::{Availability, Provider};
 use crate::runner::Runner;
 use crate::types::{ProviderId, ProviderSet};
@@ -22,6 +23,7 @@ pub fn reconcile(
     providers: &[Box<dyn Provider>],
     prev_active: &ProviderSet,
     bins: &Bins,
+    backend: DnsBackend,
     r: &dyn Runner,
 ) -> Outcome {
     let mut active = ProviderSet::new();
@@ -70,7 +72,7 @@ pub fn reconcile(
     }
 
     let newly_active: ProviderSet = active.difference(prev_active).copied().collect();
-    if let Err(e) = coexistence::apply(&active, &newly_active, bins, r) {
+    if let Err(e) = coexistence::apply(&active, &newly_active, bins, backend, r) {
         crate::error!("coexistence apply failed: {e}");
     }
     Outcome {
@@ -114,6 +116,7 @@ mod tests {
             &registry(),
             &ProviderSet::new(),
             &bins(),
+            DnsBackend::Static,
             &r,
         );
         assert_eq!(out.active, parse_set("mullvad,tailscale").unwrap());
@@ -133,6 +136,7 @@ mod tests {
             &registry(),
             &ProviderSet::new(),
             &bins(),
+            DnsBackend::Static,
             &r,
         );
         // Available but inactive → activate fires once.
@@ -154,6 +158,7 @@ mod tests {
             &registry(),
             &ProviderSet::new(),
             &bins(),
+            DnsBackend::Static,
             &r,
         );
         assert_eq!(out.active, parse_set("mullvad").unwrap());
@@ -173,6 +178,7 @@ mod tests {
             &registry(),
             &parse_set("mullvad,tailscale").unwrap(),
             &bins(),
+            DnsBackend::Static,
             &r,
         );
         assert!(r.called("mullvad disconnect"));
@@ -191,6 +197,7 @@ mod tests {
             &registry(),
             &ProviderSet::new(),
             &bins(),
+            DnsBackend::Static,
             &r,
         );
         assert!(out.active.is_empty());
@@ -213,6 +220,7 @@ mod tests {
             &registry(),
             &ProviderSet::new(),
             &bins(),
+            DnsBackend::Static,
             &r,
         );
         assert_eq!(out.available, parse_set("mullvad,tailscale").unwrap());
@@ -231,6 +239,7 @@ mod tests {
             &registry(),
             &ProviderSet::new(),
             &bins(),
+            DnsBackend::Static,
             &r,
         );
         assert!(out.available.contains(&ProviderId::Mullvad));

@@ -116,6 +116,7 @@ pub fn status(args: &[String]) -> Result<()> {
                 format_set(&s.active)
             }
         );
+        println!("dns: {}", s.dns);
     } else {
         println!("vpnmux: no status yet (daemon not running, or never reconciled)");
     }
@@ -125,7 +126,7 @@ pub fn status(args: &[String]) -> Result<()> {
 /// Machine-readable status; `None` yields an empty payload so waybar always gets valid JSON.
 fn status_json(s: Option<&Status>) -> String {
     let Some(s) = s else {
-        return "{\"generation\":0,\"active\":[],\"available\":[],\"unavailable\":[]}".to_string();
+        return "{\"generation\":0,\"active\":[],\"available\":[],\"unavailable\":[],\"dns\":\"static\"}".to_string();
     };
     let arr = |set: &ProviderSet| {
         set.iter()
@@ -146,11 +147,12 @@ fn status_json(s: Option<&Status>) -> String {
         .collect::<Vec<_>>()
         .join(",");
     format!(
-        "{{\"generation\":{},\"active\":[{}],\"available\":[{}],\"unavailable\":[{}]}}",
+        "{{\"generation\":{},\"active\":[{}],\"available\":[{}],\"unavailable\":[{}],\"dns\":\"{}\"}}",
         s.generation,
         arr(&s.active),
         arr(&s.available),
-        unavailable
+        unavailable,
+        s.dns.as_str()
     )
 }
 
@@ -259,10 +261,11 @@ mod tests {
             active: parse_set("mullvad").unwrap(),
             available: parse_set("mullvad,tailscale").unwrap(),
             unavailable: vec![(ProviderId::Tailscale, "not logged in".into())],
+            dns: crate::dns::DnsBackend::SystemdResolved,
         };
         assert_eq!(
             status_json(Some(&s)),
-            "{\"generation\":12,\"active\":[\"mullvad\"],\"available\":[\"mullvad\",\"tailscale\"],\"unavailable\":[{\"provider\":\"tailscale\",\"reason\":\"not logged in\"}]}"
+            "{\"generation\":12,\"active\":[\"mullvad\"],\"available\":[\"mullvad\",\"tailscale\"],\"unavailable\":[{\"provider\":\"tailscale\",\"reason\":\"not logged in\"}],\"dns\":\"systemd-resolved\"}"
         );
     }
 
@@ -270,7 +273,7 @@ mod tests {
     fn status_json_none_is_empty_payload() {
         assert_eq!(
             status_json(None),
-            "{\"generation\":0,\"active\":[],\"available\":[],\"unavailable\":[]}"
+            "{\"generation\":0,\"active\":[],\"available\":[],\"unavailable\":[],\"dns\":\"static\"}"
         );
     }
 
@@ -281,10 +284,11 @@ mod tests {
             active: ProviderSet::new(),
             available: ProviderSet::new(),
             unavailable: vec![(ProviderId::Mullvad, "weird \"quote\"".into())],
+            dns: crate::dns::DnsBackend::Static,
         };
         assert_eq!(
             status_json(Some(&s)),
-            "{\"generation\":1,\"active\":[],\"available\":[],\"unavailable\":[{\"provider\":\"mullvad\",\"reason\":\"weird \\\"quote\\\"\"}]}"
+            "{\"generation\":1,\"active\":[],\"available\":[],\"unavailable\":[{\"provider\":\"mullvad\",\"reason\":\"weird \\\"quote\\\"\"}],\"dns\":\"static\"}"
         );
     }
 }

@@ -1,3 +1,4 @@
+use crate::dns::DnsBackend;
 use crate::types::{format_set, parse_set, ProviderId, ProviderSet, Result};
 use std::fmt::Write as _;
 use std::fs;
@@ -61,15 +62,18 @@ pub struct Status {
     /// Providers engageable right now; the CLI surfaces this via `status --json`.
     pub available: ProviderSet,
     pub unavailable: Vec<(ProviderId, String)>,
+    /// DNS subsystem owning resolv.conf; absent in old files → `Static`.
+    pub dns: DnsBackend,
 }
 
 impl Status {
     pub fn serialize(&self) -> String {
         let mut s = format!(
-            "generation {}\nactive{}\navailable{}\n",
+            "generation {}\nactive{}\navailable{}\ndns {}\n",
             self.generation,
             providers_suffix(&self.active),
             providers_suffix(&self.available),
+            self.dns.as_str(),
         );
         for (id, reason) in &self.unavailable {
             let _ = writeln!(s, "unavailable {}:{}", id.as_str(), reason);
@@ -113,9 +117,12 @@ pub fn read_status(path: &str) -> Result<Option<Status>> {
             let mut active = ProviderSet::new();
             let mut available = ProviderSet::new();
             let mut unavailable = Vec::new();
+            let mut dns = DnsBackend::Static;
             for line in text.lines() {
                 if let Some(rest) = line.trim().strip_prefix("generation ") {
                     generation = rest.trim().parse()?;
+                } else if let Some(rest) = line.trim().strip_prefix("dns ") {
+                    dns = DnsBackend::from_str(rest.trim());
                 } else if let Some(rest) = line.trim().strip_prefix("unavailable ") {
                     if let Some((id, reason)) = rest.split_once(':') {
                         if let Ok(id) = id.parse::<ProviderId>() {
@@ -133,6 +140,7 @@ pub fn read_status(path: &str) -> Result<Option<Status>> {
                 active,
                 available,
                 unavailable,
+                dns,
             }))
         }
         None => Ok(None),
@@ -173,12 +181,14 @@ mod tests {
             active: parse_set("mullvad").unwrap(),
             available: parse_set("mullvad").unwrap(),
             unavailable: vec![(ProviderId::Tailscale, "not logged in".into())],
+            dns: DnsBackend::SystemdResolved,
         };
         let out = s.serialize();
         assert!(out.contains("generation 2"));
         assert!(out.contains("active mullvad"));
         assert!(out.contains("unavailable tailscale:not logged in"));
         assert!(out.contains("available mullvad"));
+        assert!(out.contains("dns systemd-resolved"));
     }
 
     #[test]
@@ -188,8 +198,12 @@ mod tests {
             active: ProviderSet::new(),
             available: ProviderSet::new(),
             unavailable: Vec::new(),
+            dns: DnsBackend::Static,
         };
-        assert_eq!(s.serialize(), "generation 1\nactive\navailable\n");
+        assert_eq!(
+            s.serialize(),
+            "generation 1\nactive\navailable\ndns static\n"
+        );
     }
 
     #[test]
@@ -200,6 +214,7 @@ mod tests {
             active: parse_set("mullvad").unwrap(),
             available: parse_set("mullvad,tailscale").unwrap(),
             unavailable: Vec::new(),
+            dns: DnsBackend::Resolvconf,
         };
         write_status(&path, &s).unwrap();
         let back = read_status(&path).unwrap().unwrap();
@@ -215,6 +230,8 @@ mod tests {
         let back = read_status(&path).unwrap().unwrap();
         assert!(back.available.is_empty());
         assert_eq!(back.active, parse_set("mullvad").unwrap());
+        // No `dns` line in old files → default Static.
+        assert_eq!(back.dns, DnsBackend::Static);
         std::fs::remove_file(&path).unwrap();
     }
 
@@ -251,6 +268,7 @@ mod tests {
             active: parse_set("mullvad").unwrap(),
             available: parse_set("mullvad").unwrap(),
             unavailable: vec![(ProviderId::Tailscale, "not logged in".into())],
+            dns: DnsBackend::Static,
         };
         write_status(&path, &s).unwrap();
         let back = read_status(&path).unwrap().unwrap();
