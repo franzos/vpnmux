@@ -163,6 +163,7 @@ fn tick(
         &Status {
             generation: d.generation,
             active: outcome.active.clone(),
+            available: outcome.available.clone(),
             unavailable: outcome.unavailable.clone(),
         },
     ) {

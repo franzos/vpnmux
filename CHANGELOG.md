@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.2] - 2026-06-01
+
+### Added
+- `vpnmux status --json` — machine-readable status output
+- waybar integration: status icon + available-only toggle
+
 ## [0.1.1] - 2026-05-28
 
 ### Added

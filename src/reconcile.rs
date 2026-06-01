@@ -6,6 +6,9 @@ use crate::types::{ProviderId, ProviderSet};
 #[derive(Debug, PartialEq)]
 pub struct Outcome {
     pub active: ProviderSet,
+    /// Every provider engageable right now (probe == Available), regardless of
+    /// whether it was desired. Drives the waybar available-only menu.
+    pub available: ProviderSet,
     pub unavailable: Vec<(ProviderId, String)>,
     /// Providers that flipped inactive→active this tick (coexistence one-shots).
     pub newly_active: ProviderSet,
@@ -22,12 +25,16 @@ pub fn reconcile(
     r: &dyn Runner,
 ) -> Outcome {
     let mut active = ProviderSet::new();
+    let mut available = ProviderSet::new();
     let mut unavailable = Vec::new();
 
     for p in providers {
         // Single status probe per provider per tick; both availability and
         // active-ness derive from it. We only re-probe after an action.
         let st = p.status(r);
+        if st.availability == Availability::Available {
+            available.insert(p.id());
+        }
         let want = desired.contains(&p.id());
         let mut acted = false;
         if want {
@@ -68,6 +75,7 @@ pub fn reconcile(
     }
     Outcome {
         active,
+        available,
         unavailable,
         newly_active,
     }
@@ -189,5 +197,44 @@ mod tests {
         assert!(!r.called("mullvad disconnect"));
         assert!(!r.called("tailscale down"));
         assert!(!r.called("nft delete table inet mullvad"));
+    }
+
+    #[test]
+    fn available_includes_non_desired_providers() {
+        // Tailscale is Stopped (available, just not up) and NOT desired; it must
+        // still appear in `available` so the waybar menu can offer it.
+        let r = MockRunner::new().on("mullvad status", 0, "Connected\n").on(
+            "tailscale status --json",
+            0,
+            TS_STOPPED,
+        );
+        let out = reconcile(
+            &parse_set("mullvad").unwrap(),
+            &registry(),
+            &ProviderSet::new(),
+            &bins(),
+            &r,
+        );
+        assert_eq!(out.available, parse_set("mullvad,tailscale").unwrap());
+        assert_eq!(out.active, parse_set("mullvad").unwrap());
+    }
+
+    #[test]
+    fn unavailable_provider_is_absent_from_available() {
+        let r = MockRunner::new().on("mullvad status", 0, "Connected\n").on(
+            "tailscale status --json",
+            0,
+            TS_NEEDS_LOGIN,
+        );
+        let out = reconcile(
+            &parse_set("mullvad,tailscale").unwrap(),
+            &registry(),
+            &ProviderSet::new(),
+            &bins(),
+            &r,
+        );
+        assert!(out.available.contains(&ProviderId::Mullvad));
+        assert!(!out.available.contains(&ProviderId::Tailscale));
+        assert_eq!(out.active, parse_set("mullvad").unwrap());
     }
 }

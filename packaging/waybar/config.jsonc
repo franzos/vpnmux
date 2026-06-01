@@ -1,0 +1,13 @@
+// vpnmux waybar module. Merge this into your ~/.config/waybar/config and add
+// "custom/vpnmux" to one of your "modules-left/center/right" arrays.
+// The two scripts must be on PATH (or use absolute paths here).
+{
+  "custom/vpnmux": {
+    "exec": "vpnmux-waybar-status.sh",
+    "return-type": "json",
+    "interval": 5,
+    "signal": 8,
+    "on-click": "vpnmux-waybar-toggle.sh",
+    "tooltip": true
+  }
+}

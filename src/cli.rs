@@ -1,6 +1,6 @@
 use crate::paths;
 use crate::provider::Availability;
-use crate::state::{read_desired, read_status, write_desired, Desired};
+use crate::state::{read_desired, read_status, write_desired, Desired, Status};
 use crate::sys::FileLock;
 use crate::types::{format_set, parse_set, providers, ProviderId, ProviderSet, Result};
 use std::io::Write;
@@ -99,8 +99,14 @@ pub fn set(args: &[String]) -> Result<()> {
     }
 }
 
-pub fn status() -> Result<()> {
-    if let Some(s) = read_status(paths::STATUS_FILE)? {
+pub fn status(args: &[String]) -> Result<()> {
+    let json = args.iter().any(|a| a == "--json");
+    let s = read_status(paths::STATUS_FILE)?;
+    if json {
+        println!("{}", status_json(s.as_ref()));
+        return Ok(());
+    }
+    if let Some(s) = s {
         println!("generation: {}", s.generation);
         println!(
             "active: {}",
@@ -114,6 +120,38 @@ pub fn status() -> Result<()> {
         println!("vpnmux: no status yet (daemon not running, or never reconciled)");
     }
     Ok(())
+}
+
+/// Machine-readable status; `None` yields an empty payload so waybar always gets valid JSON.
+fn status_json(s: Option<&Status>) -> String {
+    let Some(s) = s else {
+        return "{\"generation\":0,\"active\":[],\"available\":[],\"unavailable\":[]}".to_string();
+    };
+    let arr = |set: &ProviderSet| {
+        set.iter()
+            .map(|p| format!("\"{}\"", p.as_str()))
+            .collect::<Vec<_>>()
+            .join(",")
+    };
+    let unavailable = s
+        .unavailable
+        .iter()
+        .map(|(id, reason)| {
+            format!(
+                "{{\"provider\":\"{}\",\"reason\":\"{}\"}}",
+                id.as_str(),
+                json_escape(reason)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        "{{\"generation\":{},\"active\":[{}],\"available\":[{}],\"unavailable\":[{}]}}",
+        s.generation,
+        arr(&s.active),
+        arr(&s.available),
+        unavailable
+    )
 }
 
 /// Parse `set` args into the desired provider set and the --yes flag. Accepts
@@ -157,6 +195,25 @@ fn lockdown_on(r: &dyn crate::runner::Runner) -> bool {
     m.lockdown_on(r)
 }
 
+/// Escape a string for a JSON double-quoted value (reasons come from CLI output).
+fn json_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => {
+                out.push_str(&format!("\\u{:04x}", c as u32));
+            }
+            c => out.push(c),
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -184,5 +241,50 @@ mod tests {
     #[test]
     fn unknown_provider_is_an_error() {
         assert!(parse_args(&args(&["mullvad,wireguard"])).is_err());
+    }
+
+    #[test]
+    fn json_escape_handles_specials() {
+        assert_eq!(json_escape(r#"a"b\c"#), r#"a\"b\\c"#);
+        assert_eq!(json_escape("line1\nline2"), "line1\\nline2");
+        assert_eq!(json_escape("tab\tend"), "tab\\tend");
+        assert_eq!(json_escape("\u{0001}"), "\\u0001");
+        assert_eq!(json_escape("a\rb"), "a\\rb");
+    }
+
+    #[test]
+    fn status_json_shape() {
+        let s = Status {
+            generation: 12,
+            active: parse_set("mullvad").unwrap(),
+            available: parse_set("mullvad,tailscale").unwrap(),
+            unavailable: vec![(ProviderId::Tailscale, "not logged in".into())],
+        };
+        assert_eq!(
+            status_json(Some(&s)),
+            "{\"generation\":12,\"active\":[\"mullvad\"],\"available\":[\"mullvad\",\"tailscale\"],\"unavailable\":[{\"provider\":\"tailscale\",\"reason\":\"not logged in\"}]}"
+        );
+    }
+
+    #[test]
+    fn status_json_none_is_empty_payload() {
+        assert_eq!(
+            status_json(None),
+            "{\"generation\":0,\"active\":[],\"available\":[],\"unavailable\":[]}"
+        );
+    }
+
+    #[test]
+    fn status_json_escapes_reason() {
+        let s = Status {
+            generation: 1,
+            active: ProviderSet::new(),
+            available: ProviderSet::new(),
+            unavailable: vec![(ProviderId::Mullvad, "weird \"quote\"".into())],
+        };
+        assert_eq!(
+            status_json(Some(&s)),
+            "{\"generation\":1,\"active\":[],\"available\":[],\"unavailable\":[{\"provider\":\"mullvad\",\"reason\":\"weird \\\"quote\\\"\"}]}"
+        );
     }
 }

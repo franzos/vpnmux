@@ -58,15 +58,18 @@ fn providers_suffix(set: &ProviderSet) -> String {
 pub struct Status {
     pub generation: u64,
     pub active: ProviderSet,
+    /// Providers engageable right now; the CLI surfaces this via `status --json`.
+    pub available: ProviderSet,
     pub unavailable: Vec<(ProviderId, String)>,
 }
 
 impl Status {
     pub fn serialize(&self) -> String {
         let mut s = format!(
-            "generation {}\nactive{}\n",
+            "generation {}\nactive{}\navailable{}\n",
             self.generation,
-            providers_suffix(&self.active)
+            providers_suffix(&self.active),
+            providers_suffix(&self.available),
         );
         for (id, reason) in &self.unavailable {
             let _ = writeln!(s, "unavailable {}:{}", id.as_str(), reason);
@@ -108,6 +111,7 @@ pub fn read_status(path: &str) -> Result<Option<Status>> {
         Some(text) => {
             let mut generation = 0u64;
             let mut active = ProviderSet::new();
+            let mut available = ProviderSet::new();
             let mut unavailable = Vec::new();
             for line in text.lines() {
                 if let Some(rest) = line.trim().strip_prefix("generation ") {
@@ -118,6 +122,8 @@ pub fn read_status(path: &str) -> Result<Option<Status>> {
                             unavailable.push((id, reason.to_string()));
                         }
                     }
+                } else if let Some(rest) = line.trim().strip_prefix("available") {
+                    available = parse_set(rest.trim())?;
                 } else if let Some(rest) = line.trim().strip_prefix("active") {
                     active = parse_set(rest.trim())?;
                 }
@@ -125,6 +131,7 @@ pub fn read_status(path: &str) -> Result<Option<Status>> {
             Ok(Some(Status {
                 generation,
                 active,
+                available,
                 unavailable,
             }))
         }
@@ -160,26 +167,55 @@ mod tests {
     }
 
     #[test]
-    fn status_empty_active_has_no_trailing_space() {
-        let s = Status {
-            generation: 4,
-            active: ProviderSet::new(),
-            unavailable: Vec::new(),
-        };
-        assert_eq!(s.serialize(), "generation 4\nactive\n");
-    }
-
-    #[test]
     fn status_serialize_includes_unavailable() {
         let s = Status {
             generation: 2,
             active: parse_set("mullvad").unwrap(),
+            available: parse_set("mullvad").unwrap(),
             unavailable: vec![(ProviderId::Tailscale, "not logged in".into())],
         };
         let out = s.serialize();
         assert!(out.contains("generation 2"));
         assert!(out.contains("active mullvad"));
         assert!(out.contains("unavailable tailscale:not logged in"));
+        assert!(out.contains("available mullvad"));
+    }
+
+    #[test]
+    fn status_empty_available_has_no_trailing_space() {
+        let s = Status {
+            generation: 1,
+            active: ProviderSet::new(),
+            available: ProviderSet::new(),
+            unavailable: Vec::new(),
+        };
+        assert_eq!(s.serialize(), "generation 1\nactive\navailable\n");
+    }
+
+    #[test]
+    fn status_roundtrip_preserves_available() {
+        let path = temp_path("status-avail");
+        let s = Status {
+            generation: 9,
+            active: parse_set("mullvad").unwrap(),
+            available: parse_set("mullvad,tailscale").unwrap(),
+            unavailable: Vec::new(),
+        };
+        write_status(&path, &s).unwrap();
+        let back = read_status(&path).unwrap().unwrap();
+        assert_eq!(back, s);
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn read_status_without_available_line_yields_empty_set() {
+        // An older daemon's status file has no `available` line.
+        let path = temp_path("status-no-avail");
+        std::fs::write(&path, "generation 3\nactive mullvad\n").unwrap();
+        let back = read_status(&path).unwrap().unwrap();
+        assert!(back.available.is_empty());
+        assert_eq!(back.active, parse_set("mullvad").unwrap());
+        std::fs::remove_file(&path).unwrap();
     }
 
     fn temp_path(tag: &str) -> String {
@@ -213,6 +249,7 @@ mod tests {
         let s = Status {
             generation: 3,
             active: parse_set("mullvad").unwrap(),
+            available: parse_set("mullvad").unwrap(),
             unavailable: vec![(ProviderId::Tailscale, "not logged in".into())],
         };
         write_status(&path, &s).unwrap();

@@ -1,0 +1,9 @@
+/* vpnmux waybar module. The `class` comes from vpnmux-waybar-status.sh:
+   none | mullvad | tailscale | both | degraded | unknown. */
+#custom-vpnmux { padding: 0 8px; }
+#custom-vpnmux.none      { color: #6c7086; }
+#custom-vpnmux.mullvad   { color: #f5a97f; }
+#custom-vpnmux.tailscale { color: #8aadf4; }
+#custom-vpnmux.both      { color: #a6da95; }
+#custom-vpnmux.degraded  { color: #ed8796; }
+#custom-vpnmux.unknown   { color: #5b6078; }

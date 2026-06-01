@@ -95,6 +95,43 @@ first — it would cut all connectivity (that's the killswitch doing its job).
 The daemon never imposes a default: with no desired state set it stays idle and
 touches nothing.
 
+## waybar
+
+A status icon plus a click-to-switch menu that only offers the configurations
+that are actually engageable right now.
+
+`vpnmux status --json` exposes the daemon's view as machine-readable JSON
+(reading only `/run/vpnmux/status` — it spawns nothing):
+
+```json
+{"generation":12,"active":["mullvad"],"available":["mullvad","tailscale"],
+ "unavailable":[{"provider":"tailscale","reason":"not logged in"}]}
+```
+
+- `active` — providers currently up.
+- `available` — providers engageable right now (this drives the menu).
+- `unavailable` — providers you *asked for* that couldn't be engaged, with a reason.
+
+Two scripts under [`packaging/waybar/`](packaging/waybar) wire it up:
+
+- `vpnmux-waybar-status.sh` — maps the JSON to waybar's format (needs `jq`).
+- `vpnmux-waybar-toggle.sh` — builds the available-only menu and applies the
+  choice. Launcher-agnostic: set `VPNMUX_MENU` to any dmenu-compatible command
+  (defaults to `fuzzel --dmenu`), e.g. `VPNMUX_MENU="wofi --dmenu"` or
+  `VPNMUX_MENU="rofi -dmenu"` (the value is word-split, so the launcher binary's
+  path can't contain spaces).
+
+Put both scripts on your `PATH`, then add the module from
+[`packaging/waybar/config.jsonc`](packaging/waybar/config.jsonc) and style it
+with [`packaging/waybar/style.css`](packaging/waybar/style.css). The toggle sends
+`SIGRTMIN+8` to waybar (`"signal": 8`) so the icon refreshes immediately.
+
+> The toggle runs `vpnmux set … --yes`, which **bypasses the lockdown prompt**.
+> Switching off Mullvad from the menu while lockdown is on will cut all
+> connectivity (the killswitch doing its job) — there's no confirmation in the
+> GUI path, unlike the CLI. You'll need to be in the `vpnmux` group (see
+> **Sudo-less CLI**) for the menu to read status and flip providers.
+
 ## Environment
 
 | Var | Purpose |
@@ -102,3 +139,4 @@ touches nothing.
 | `VPNMUX_LOG` | `error` / `info` (default) / `debug` |
 | `VPNMUX_NFT` | absolute path to `nft` (else scans `/gnu/store`) |
 | `VPNMUX_MULLVAD` / `VPNMUX_TAILSCALE` | adapter binary paths |
+| `VPNMUX_GROUP` | system group for sudo-less CLI (default: `vpnmux`; empty to opt out) |
